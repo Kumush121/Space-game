@@ -1,0 +1,234 @@
+import pygame, random, sys
+pygame.init()
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Space Escape & Fight")
+clock = pygame.time.Clock()
+BLACK, WHITE, RED, GREEN, YELLOW, CYAN = (10, 10, 20), (255, 255, 255), (255, 50, 50), (50, 255, 50), (255, 215, 0), (0, 255, 255)
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((50, 40), pygame.SRCALPHA)
+        pygame.draw.polygon(self.image, CYAN, [(25, 0), (0, 40), (50, 40)])
+        pygame.draw.polygon(self.image, WHITE, [(25, 10), (10, 35), (40, 35)])
+        self.rect = self.image.get_rect(centerx=WIDTH // 2, bottom=HEIGHT - 20)
+    def update(self):
+        keys = pygame.key.get_pressed()
+        dx = (keys[pygame.K_RIGHT] or keys[pygame.K_d]) - (keys[pygame.K_LEFT] or keys[pygame.K_a])
+        dy = (keys[pygame.K_DOWN] or keys[pygame.K_s]) - (keys[pygame.K_UP] or keys[pygame.K_w])
+        self.rect.x += dx * 7
+        self.rect.y += dy * 7
+        self.rect.clamp_ip(screen.get_rect())
+    def shoot(self):
+        b1, b2 = Bullet(self.rect.left, self.rect.top), Bullet(self.rect.right - 10, self.rect.top)
+        all_sprites.add(b1, b2); bullets.add(b1, b2)
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((10, 20), pygame.SRCALPHA)
+        pygame.draw.rect(self.image, GREEN, (0, 0, 10, 20), border_radius=5)
+        self.rect = self.image.get_rect(x=x, y=y)
+    def update(self):
+        self.rect.y -= 12
+        if self.rect.bottom < 0: self.kill()
+class Alien(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
+        pygame.draw.polygon(self.image, RED, [(20, 40), (0, 0), (40, 0)])
+        pygame.draw.circle(self.image, YELLOW, (20, 15), 8)
+        self.rect = self.image.get_rect(x=random.randint(0, WIDTH - 40), y=random.randint(-100, -40))
+        self.sy, self.sx = random.randint(3, 6), random.randint(-2, 2)
+    def update(self):
+        self.rect.y += self.sy; self.rect.x += self.sx
+        if self.rect.top > HEIGHT or self.rect.left < -40 or self.rect.right > WIDTH + 40:
+            self.rect.topleft = (random.randint(0, WIDTH - 40), random.randint(-100, -40))
+class Crack(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.size = random.randint(60, 120)
+        self.image = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        pygame.draw.polygon(self.image, (138, 43, 226), [(0, self.size//2), (self.size//3, self.size//4), (2*self.size//3, 3*self.size//4), (self.size, self.size//2)], 3)
+        self.rect = self.image.get_rect(x=random.randint(0, WIDTH - self.size), y=random.randint(-200, -100))
+    def update(self):
+        self.rect.y += 5
+        if self.rect.top > HEIGHT: self.rect.topleft = (random.randint(0, WIDTH - self.size), random.randint(-200, -100))
+class Explosion(pygame.sprite.Sprite):
+    def __init__(self, center):
+        super().__init__()
+        self.center, self.radius = center, 5
+        self.image = pygame.Surface((70, 70), pygame.SRCALPHA)
+        self.rect = self.image.get_rect(center=center)
+    def update(self):
+        self.radius += 3; self.image.fill((0,0,0,0))
+        if self.radius < 35:
+            pygame.draw.circle(self.image, YELLOW, (35, 35), self.radius)
+            pygame.draw.circle(self.image, RED, (35, 35), max(1, self.radius - 10))
+        else: self.kill()
+all_sprites, aliens, cracks, bullets = pygame.sprite.Group(), pygame.sprite.Group(), pygame.sprite.Group(), pygame.sprite.Group()
+player = Player(); all_sprites.add(player)
+for _ in range(6): a = Alien(); all_sprites.add(a); aliens.add(a)
+for _ in range(3): c = Crack(); all_sprites.add(c); cracks.add(c)
+score, font, running, game_over = 0, pygame.font.SysFont("Arial", 24), True, False
+while running:
+    clock.tick(60)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT: running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE and not game_over: player.shoot()
+            if event.key == pygame.K_r and game_over:
+                game_over, score = False, 0
+                all_sprites.empty(); aliens.empty(); cracks.empty(); bullets.empty()
+                player = Player(); all_sprites.add(player)
+                for _ in range(6): a = Alien(); all_sprites.add(a); aliens.add(a)
+                for _ in range(3): c = Crack(); all_sprites.add(c); cracks.add(c)
+    if not game_over:
+        all_sprites.update()
+        for hit in pygame.sprite.groupcollide(aliens, bullets, True, True):
+            score += 10; all_sprites.add(Explosion(hit.rect.center))
+            a = Alien(); all_sprites.add(a); aliens.add(a)
+        if pygame.sprite.spritecollide(player, aliens, False) or pygame.sprite.spritecollide(player, cracks, False):
+            all_sprites.add(Explosion(player.rect.center)); game_over = True
+    screen.fill(BLACK); all_sprites.draw(screen)
+    screen.blit(font.render(f"Score: {score}", True, WHITE), (10, 10))
+    if game_over: screen.blit(font.render("GAME OVER! Press 'R' to Restart", True, RED), (WIDTH // 2 - 180, HEIGHT // 2))
+    pygame.display.flip()
+pygame.quit()
+sys.exit()
+import pygame, sys, math, random
+pygame.init()
+W, H = 800, 600
+screen = pygame.display.set_mode((W, H))
+pygame.display.set_caption("Starstrike Neon: High-Level 2.5D")
+clock = pygame.time.Clock()
+
+# Эффект шлейфа (Motion Blur) для кадра
+blur_surf = pygame.Surface((W, H))
+blur_surf.set_alpha(35)
+
+# Слои звезд для 3D Параллакса (Глубина космоса)
+stars_far = [[random.randint(0, W), random.randint(0, H)] for _ in range(40)]
+stars_near = [[random.randint(0, W), random.randint(0, H)] for _ in range(25)]
+
+# Игровые объекты
+px, py = 400, 500
+lasers = []  # [x, y, is_player]
+enemies = [] # [x, y, speed, angle]
+particles = [] # [x, y, vx, vy, color, alpha, size]
+shake, score, frame = 0, 0, 0
+
+def add_explosion(x, y):
+    global shake
+    shake = 14 # Сила тряски экрана
+    for _ in range(25):
+        angle = random.uniform(0, math.pi * 2)
+        spd = random.uniform(2, 6)
+        particles.append([x, y, math.cos(angle)*spd, math.sin(angle)*spd, (255, random.randint(100, 255), 50), 255, random.uniform(3, 6)])
+
+running = True
+while running:
+    frame += 1
+    for e in pygame.event.get():
+        if e.type == pygame.QUIT: running = False
+
+    # 1. УПРАВЛЕНИЕ КОРАБЛЕМ (Стрелочки + Пробел)
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT] and px > 20: px -= 6
+    if keys[pygame.K_RIGHT] and px < W - 20: px += 6
+    if keys[pygame.K_UP] and py > 40: py -= 5
+    if keys[pygame.K_DOWN] and py < H - 40: py += 5
+    if keys[pygame.K_SPACE] and frame % 8 == 0:
+        lasers.append([px, py - 20, True])
+
+    # 2. РЕЖИССУРА ИГРЫ И СПАВН ВРАГОВ
+    if random.randint(0, 100) > 96:
+        enemies.append([random.randint(40, W-40), -40, random.uniform(2, 4.5), random.uniform(0, 10)])
+
+    # 3. ЛОГИКА ОБЪЕКТОВ
+    # Движение лазеров
+    for l in lasers[:]:
+        l[1] += -12 if l[2] else 7
+        if l[1] < -20 or l[1] > H + 20: lasers.remove(l)
+
+    # Движение врагов + их стрельба
+    for enemy in enemies[:]:
+        enemy[1] += enemy[2] # Скорость вниз
+        enemy[0] += math.sin(frame * 0.04 + enemy[3]) * 2 # Синусоидальный маневр
+        if enemy[1] > H + 40: enemies.remove(enemy)
+        elif random.randint(0, 1000) > 988 and enemy[1] > 0:
+            lasers.append([enemy[0], enemy[1] + 20, False])
+
+    # Коллизии (Проверка попаданий лазера игрока во врага)
+    for l in lasers[:]:
+        if l[2]: # Если это лазер игрока
+            for enemy in enemies[:]:
+                if math.hypot(l[0] - enemy[0], l[1] - enemy[1]) < 35:
+                    if l in lasers: lasers.remove(l)
+                    if enemy in enemies: enemies.remove(enemy)
+                    add_explosion(enemy[0], enemy[1])
+                    score += 100
+
+    # Обновление частиц взрыва
+    for p in particles[:]:
+        p[0] += p[2]; p[1] += p[3] # Движение
+        p[3] += 0.05 # Гравитация для эффекта падения искр
+        p[5] -= 5     # Затухание альфы
+        p[6] = max(0.1, p[6] - 0.05) # Уменьшение размера
+        if p[5] <= 0: particles.remove(p)
+
+    # 4. СЛОИ ОТРИСОВКИ С КИНЕМАТОГРАФИЧНЫМИ ЭФФЕКТАМИ
+    # Расчет Screen Shake (тряска камеры)
+    off_x, off_y = 0, 0
+    if shake > 0:
+        shake -= 1
+        off_x = random.randint(-shake, shake)
+        off_y = random.randint(-shake, shake)
+
+    # Создаем виртуальный игровой холст для рендера эффектов сцены
+    game_surf = pygame.Surface((W, H))
+    game_surf.blit(blur_surf, (0, 0)) # Наложение Motion Blur
+
+    # Рисуем 3D Параллакс звезд
+    for s in stars_far:
+        s[1] = (s[1] + 1) % H
+        pygame.draw.circle(game_surf, (100, 100, 140), s, 1)
+    for s in stars_near:
+        s[1] = (s[1] + 3) % H
+        pygame.draw.circle(game_surf, (220, 220, 255), s, 2)
+
+    # Отрисовка частиц плазмы
+    for p in particles:
+        pygame.draw.circle(game_surf, p[4], (int(p[0]), int(p[1])), int(p[6]))
+
+    # Отрисовка Неоновых лазеров (Свечение через слои закругленных линий)
+    for l in lasers:
+        color = (0, 255, 255) if l[2] else (255, 50, 50)
+        # Наслоение линий создает High-Level эффект свечения (Bloom)
+        pygame.draw.line(game_surf, color, (l[0], l[1]), (l[0], l[1]-15 if l[2] else l[1]+15), 6)
+        pygame.draw.line(game_surf, (255, 255, 255), (l[0], l[1]), (l[0], l[1]-12 if l[2] else l[1]+12), 2)
+
+    # Отрисовка Вражеских истребителей
+    for e in enemies:
+        pygame.draw.polygon(game_surf, (255, 40, 90), [(e[0], e[1]+20), (e[0]-18, e[1]-10), (e[0]-8, e[1]-5), (e[0]+8, e[1]-5), (e[0]+18, e[1]-10)])
+        pygame.draw.polygon(game_surf, (255, 160, 0), [(e[0]-6, e[1]-6), (e[0], e[1]-22), (e[0]+6, e[1]-6)]) # Реактивный огонь
+
+    # Отрисовка High-Level Кибер-корабля игрока
+    pygame.draw.polygon(game_surf, (0, 180, 255), [(px, py-22), (px-22, py+15), (px, py+5), (px+22, py+15)])
+    pygame.draw.polygon(game_surf, (255, 255, 255), [(px, py-12), (px-8, py+5), (px+8, py+5)]) # Кабина купола
+    if keys[pygame.K_UP] or frame % 2 == 0: # Световой выхлоп двигателя
+        pygame.draw.line(game_surf, (255, 140, 0), (px, py+8), (px, py+24 + random.randint(0, 10)), 4)
+
+    # Выводим холст на экран с учетом смещения камеры от взрыва
+    screen.fill((10, 10, 18))
+    screen.blit(game_surf, (off_x, off_y))
+
+    # Отображение счета
+    score_font = pygame.font.SysFont("Arial", 28, bold=True)
+    score_text = score_font.render(f"SCORE: {score}", True, (0, 255, 180))
+    screen.blit(score_text, (20, 20))
+
+    pygame.display.flip()
+    clock.tick(60)
+
+pygame.quit()
+sys.exit()
